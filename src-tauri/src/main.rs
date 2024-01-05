@@ -70,14 +70,14 @@ async fn login(handle: tauri::AppHandle) -> bool {
         unsafe {
             // see https://docs.rs/webview2-com/0.19.1/webview2_com/Microsoft/Web/WebView2/Win32/struct.ICoreWebView2Controller.html
             use webview2_com::Microsoft::Web::WebView2::Win32::{
-                ICoreWebView2, ICoreWebView2Controller, ICoreWebView2CookieManager,
+                ICoreWebView2, ICoreWebView2Controller, ICoreWebView2CookieManager, ICoreWebView2_2,
             };
             let controller: ICoreWebView2Controller = webview.controller();
             controller.SetZoomFactor(0.75).unwrap();
-            // 获取cookie
+            // get ICoreWebView2
             let core_webview2: ICoreWebView2 = controller.CoreWebView2().unwrap();
-
-            let tmp = core_webview2;
+            // convert ICoreWebView2 to ICoreWebView2
+            let core_webview2_2: ICoreWebView2_2 = None::<ICoreWebView2_2>.unwrap();
         }
 
         #[cfg(target_os = "macos")]
