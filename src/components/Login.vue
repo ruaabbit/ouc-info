@@ -2,12 +2,12 @@
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/tauri";
 
-const loginSuccess = ref(false);
+const loginSessionId = ref("");
 
 
 async function login() {
   // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-  loginSuccess.value = await invoke("login", {});
+  loginSessionId.value = await invoke("login_id_ouc_edu_cn", {});
 }
 </script>
 
@@ -16,5 +16,5 @@ async function login() {
     <button type="submit">登录</button>
   </form>
 
-  <p>{{ loginSuccess }}</p>
+  <p>JSESSIONID : {{ loginSessionId }}</p>
 </template>
