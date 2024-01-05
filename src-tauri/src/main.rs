@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use webview2_com::Microsoft::Web::WebView2::Win32;
+
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
 async fn login(handle: tauri::AppHandle) -> bool {
@@ -67,30 +69,15 @@ async fn login(handle: tauri::AppHandle) -> bool {
         #[cfg(windows)]
         unsafe {
             // see https://docs.rs/webview2-com/0.19.1/webview2_com/Microsoft/Web/WebView2/Win32/struct.ICoreWebView2Controller.html
-            use webview2_com::Microsoft::Web::WebView2::ICoreWebView2CookieManager;
-            use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Controller;
-            webview.controller().SetZoomFactor(0.75).unwrap();
-            // 获取cookie
-            let cookie_manager: ICoreWebView2CookieManager =
-                webview.inner().get_CookieManager().unwrap();
-            let callback = |result: Result<
-                Vec<webview2_com::Microsoft::Web::WebView2::ICoreWebView2Cookie>,
-                webview2_com::Microsoft::Web::WebView2::CoreWebView2CookieListReadValueKind,
-            >| match result {
-                Ok(cookies) => {
-                    println!("Cookies received:");
-                    for mut cookie in cookies {
-                        println!(
-                            "Name: {}, Value: {}",
-                            cookie.Name().unwrap(),
-                            cookie.Value().unwrap()
-                        );
-                    }
-                }
-                Err(err) => {
-                    eprintln!("Error retrieving cookies: {}", err);
-                }
+            use webview2_com::Microsoft::Web::WebView2::Win32::{
+                ICoreWebView2, ICoreWebView2Controller, ICoreWebView2CookieManager,
             };
+            let controller: ICoreWebView2Controller = webview.controller();
+            controller.SetZoomFactor(0.75).unwrap();
+            // 获取cookie
+            let core_webview2: ICoreWebView2 = controller.CoreWebView2().unwrap();
+
+            let tmp = core_webview2;
         }
 
         #[cfg(target_os = "macos")]
