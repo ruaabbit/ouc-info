@@ -1880,8 +1880,10 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "soup2",
  "tauri",
  "tauri-build",
+ "webkit2gtk",
  "webview2-com",
  "windows 0.39.0",
 ]

@@ -1,16 +1,12 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+pub mod utils;
 
-pub struct Cookie {
-    pub name: String,
-    pub value: String,
-    pub domain: String,
-    pub path: String,
-}
+use utils::Cookie;
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
-async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> bool {
+async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> Result<Vec<Cookie>, String> {
     let (done_tx, done_rx) = oneshot::channel::<Vec<Cookie>>();
 
     let _login_window: tauri::Window = tauri::WindowBuilder::new(
@@ -69,22 +65,17 @@ async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> bool {
                         eprintln!("Error retrieving cookies: {}", err);
                     }
                 };
-                let _ = cookie_manager.cookies(
-                    "https://id.ouc.edu.cn",
-                    Some(&gio::Cancellable::new()),
-                    callback,
-                );
+                let _ = cookie_manager.cookies("", Some(&gio::Cancellable::new()), callback);
             }
 
             #[cfg(windows)]
             unsafe {
                 // see https://docs.rs/webview2-com/0.19.1/webview2_com/Microsoft/Web/WebView2/Win32/struct.ICoreWebView2Controller.html
-                use webview2_com::take_pwstr;
-                use webview2_com::GetCookiesCompletedHandler;
                 use webview2_com::Microsoft::Web::WebView2::Win32::{
                     ICoreWebView2, ICoreWebView2Controller, ICoreWebView2Cookie,
                     ICoreWebView2CookieManager, ICoreWebView2_2,
                 };
+                use webview2_com::{take_pwstr, GetCookiesCompletedHandler};
                 use windows::core::Interface;
                 use windows::core::HSTRING;
                 use windows::core::PWSTR;
@@ -109,9 +100,7 @@ async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> bool {
                             Some(list) => {
                                 let mut count: u32 = 0;
                                 list.Count(&mut count)?;
-                                // tracing::info!("count: {}", count);
                                 let mut cookie_str = vec![];
-                                // let mut session_id = "".to_string();
                                 for i in 0..count {
                                     let cookie: ICoreWebView2Cookie = list.GetValueAtIndex(i)?;
                                     let mut name = PWSTR::null();
@@ -122,7 +111,6 @@ async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> bool {
                                     cookie.Value(&mut value)?;
                                     cookie.Domain(&mut domain)?;
                                     cookie.Path(&mut path)?;
-
                                     cookie_str.push(Cookie {
                                         name: take_pwstr(name),
                                         value: take_pwstr(value),
@@ -130,19 +118,10 @@ async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> bool {
                                         path: take_pwstr(path),
                                     });
                                 }
-                                // 输出 cookie_str
-                                println!("Cookies received:");
-                                for cookie in cookie_str.iter() {
-                                    println!(
-                                        "Name: {}, Value: {}, Domain: {}, Path: {}",
-                                        cookie.name, cookie.value, cookie.domain, cookie.path
-                                    );
-                                }
-
                                 done_tx.send(cookie_str).unwrap();
                             }
                             None => {
-                                // tracing::info!("list is None");
+                                eprintln!("Error retrieving cookies");
                             }
                         };
                         Ok(())
@@ -158,11 +137,11 @@ async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> bool {
         })
         .unwrap();
 
-    // _login_window.close().unwrap();
+    _login_window.close().unwrap();
 
-    // let cookies = done_rx.await.unwrap();
+    let cookies = done_rx.await.unwrap();
 
-    true
+    Ok(cookies)
 }
 
 fn main() {

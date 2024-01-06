@@ -35,10 +35,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "resizable": true,
+        "resizable": false,
         "title": "ouc-info",
-        "width": 800,
-        "height": 600
+        "width": 600,
+        "height": 400
       }
     ]
   }

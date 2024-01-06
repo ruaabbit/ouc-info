@@ -2,12 +2,12 @@
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/tauri";
 
-const loginSessionId = ref("");
+const COOKIES = ref();
 
 
 async function login() {
   // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-  loginSessionId.value = await invoke("login_id_ouc_edu_cn", {});
+  COOKIES.value = await invoke("login_id_ouc_edu_cn", {});
 }
 </script>
 
@@ -15,6 +15,8 @@ async function login() {
   <form class="row" @submit.prevent="login">
     <button type="submit">登录</button>
   </form>
-
-  <p>JSESSIONID : {{ loginSessionId }}</p>
+  <!-- forEach 输出 COOKIES -->
+  <div v-for="cookie in COOKIES" :key="cookie.name">
+    {{ cookie.name }}: {{ cookie.value }}
+  </div>
 </template>
