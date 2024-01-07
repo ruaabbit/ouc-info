@@ -2,12 +2,12 @@
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/tauri";
 
-const COOKIES = ref();
+const COOKIES = ref([]);
 
 
 async function login() {
   // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-  COOKIES.value = await invoke("login_id_ouc_edu_cn", {});
+  invoke("login_id_ouc_edu_cn");
 }
 </script>
 

@@ -2,12 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 pub mod utils;
 
-use utils::Cookie;
-
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
-async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> Result<Vec<Cookie>, String> {
-    let (done_tx, done_rx) = oneshot::channel::<Vec<Cookie>>();
+async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> Result<String, String> {
+    // let (done_tx, done_rx) = oneshot::channel::<Vec<utils::Cookie>>();
 
     let _login_window: tauri::Window = tauri::WindowBuilder::new(
         &handle,
@@ -30,118 +28,121 @@ async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> Result<Vec<Cookie>, St
     {
         _url = _login_window.url();
     }
-    _login_window
-        .with_webview(move |webview| {
-            #[cfg(target_os = "linux")]
-            {
-                // see https://docs.rs/webkit2gtk/0.18.2/webkit2gtk/struct.WebView.html
-                // and https://docs.rs/webkit2gtk/0.18.2/webkit2gtk/trait.WebViewExt.html
-                use webkit2gtk::gio;
-                use webkit2gtk::traits::{CookieManagerExt, WebContextExt, WebViewExt};
-                webview.inner().set_zoom_level(0.75);
-                // 获取cookie
-                let cookie_manager = webview.inner().context().unwrap().cookie_manager().unwrap();
-                let callback = |result: Result<Vec<soup::Cookie>, webkit2gtk::Error>| match result {
-                    Ok(cookies) => {
-                        let mut cookie_str = vec![];
+    let _ = _login_window.with_webview(|webview: tauri::window::PlatformWebview| {
+        #[cfg(target_os = "linux")]
+        {
+            // see https://docs.rs/webkit2gtk/0.18.2/webkit2gtk/struct.WebView.html
+            // and https://docs.rs/webkit2gtk/0.18.2/webkit2gtk/trait.WebViewExt.html
+            use webkit2gtk::gio;
+            use webkit2gtk::traits::{CookieManagerExt, WebContextExt, WebViewExt};
 
-                        println!("Cookies received:");
-                        for mut cookie in cookies {
-                            let mut name = cookie.name().unwrap();
-                            let mut value = cookie.value().unwrap();
-                            let mut domain = cookie.domain().unwrap();
-                            let mut path = cookie.path().unwrap();
+            let linux_webview = webview.inner();
+            linux_webview.set_zoom_level(0.75);
+            // 获取cookie
+            let webcontext = linux_webview.context().unwrap();
+            let cookie_manager = webcontext.cookie_manager().unwrap();
 
-                            cookie_str.push(Cookie {
-                                name: take_pwstr(name),
-                                value: take_pwstr(value),
-                                domain: take_pwstr(domain),
-                                path: take_pwstr(path),
-                            });
+            let callback = |result: Result<Vec<soup::Cookie>, webkit2gtk::Error>| match result {
+                Ok(cookies) => {
+                    println!("{}",cookies.len());
+                    println!("Cookies received:");
+                    for mut cookie in cookies {
+                        println!(
+                            "Name: {}, Value: {}",
+                            cookie.name().unwrap(),
+                            cookie.value().unwrap()
+                        );
+                    }
+                }
+                Err(err) => {
+                    eprintln!("Error retrieving cookies: {}", err);
+                }
+            };
+
+            cookie_manager.cookies(
+                "https://id.ouc.edu.cn/sso",
+                Some(&gio::Cancellable::default()),
+                callback,
+            );
+        }
+
+        #[cfg(windows)]
+        unsafe {
+            // see https://docs.rs/webview2-com/0.19.1/webview2_com/Microsoft/Web/WebView2/Win32/struct.ICoreWebView2Controller.html
+            use webview2_com::Microsoft::Web::WebView2::Win32::{
+                ICoreWebView2, ICoreWebView2Controller, ICoreWebView2Cookie,
+                ICoreWebView2CookieManager, ICoreWebView2_2,
+            };
+            use webview2_com::{take_pwstr, GetCookiesCompletedHandler};
+            use windows::core::Interface;
+            use windows::core::HSTRING;
+            use windows::core::PWSTR;
+
+            let controller: ICoreWebView2Controller = webview.controller();
+            controller.SetZoomFactor(0.75).unwrap();
+            // get ICoreWebView2
+            let core_webview2: ICoreWebView2 = controller.CoreWebView2().unwrap();
+            let core_webview2_2: ICoreWebView2_2 = core_webview2.cast().unwrap();
+            let cookie_manager: ICoreWebView2CookieManager =
+                core_webview2_2.CookieManager().unwrap();
+            let uri = HSTRING::from("");
+
+            GetCookiesCompletedHandler::wait_for_async_operation(
+                Box::new(move |handler| {
+                    cookie_manager.GetCookies(&uri, &handler)?;
+                    Ok(())
+                }),
+                Box::new(move |hresult, list| {
+                    hresult?;
+                    match list {
+                        Some(list) => {
+                            let mut count: u32 = 0;
+                            list.Count(&mut count)?;
+                            let mut cookie_str = vec![];
+                            for i in 0..count {
+                                let cookie: ICoreWebView2Cookie = list.GetValueAtIndex(i)?;
+                                let mut name = PWSTR::null();
+                                let mut value = PWSTR::null();
+                                let mut domain = PWSTR::null();
+                                let mut path = PWSTR::null();
+                                cookie.Name(&mut name)?;
+                                cookie.Value(&mut value)?;
+                                cookie.Domain(&mut domain)?;
+                                cookie.Path(&mut path)?;
+                                cookie_str.push(utils::Cookie {
+                                    name: take_pwstr(name),
+                                    value: take_pwstr(value),
+                                    domain: take_pwstr(domain),
+                                    path: take_pwstr(path),
+                                });
+                            }
+                            done_tx.send(cookie_str).unwrap();
                         }
-                        done_tx.send(cookie_str).unwrap();
-                    }
-                    Err(err) => {
-                        eprintln!("Error retrieving cookies: {}", err);
-                    }
-                };
-                let _ = cookie_manager.cookies("", Some(&gio::Cancellable::new()), callback);
-            }
+                        None => {
+                            eprintln!("Error retrieving cookies");
+                        }
+                    };
+                    Ok(())
+                }),
+            )
+            .unwrap();
+        }
 
-            #[cfg(windows)]
-            unsafe {
-                // see https://docs.rs/webview2-com/0.19.1/webview2_com/Microsoft/Web/WebView2/Win32/struct.ICoreWebView2Controller.html
-                use webview2_com::Microsoft::Web::WebView2::Win32::{
-                    ICoreWebView2, ICoreWebView2Controller, ICoreWebView2Cookie,
-                    ICoreWebView2CookieManager, ICoreWebView2_2,
-                };
-                use webview2_com::{take_pwstr, GetCookiesCompletedHandler};
-                use windows::core::Interface;
-                use windows::core::HSTRING;
-                use windows::core::PWSTR;
-
-                let controller: ICoreWebView2Controller = webview.controller();
-                controller.SetZoomFactor(0.75).unwrap();
-                // get ICoreWebView2
-                let core_webview2: ICoreWebView2 = controller.CoreWebView2().unwrap();
-                let core_webview2_2: ICoreWebView2_2 = core_webview2.cast().unwrap();
-                let cookie_manager: ICoreWebView2CookieManager =
-                    core_webview2_2.CookieManager().unwrap();
-                let uri = HSTRING::from("");
-
-                GetCookiesCompletedHandler::wait_for_async_operation(
-                    Box::new(move |handler| {
-                        cookie_manager.GetCookies(&uri, &handler)?;
-                        Ok(())
-                    }),
-                    Box::new(move |hresult, list| {
-                        hresult?;
-                        match list {
-                            Some(list) => {
-                                let mut count: u32 = 0;
-                                list.Count(&mut count)?;
-                                let mut cookie_str = vec![];
-                                for i in 0..count {
-                                    let cookie: ICoreWebView2Cookie = list.GetValueAtIndex(i)?;
-                                    let mut name = PWSTR::null();
-                                    let mut value = PWSTR::null();
-                                    let mut domain = PWSTR::null();
-                                    let mut path = PWSTR::null();
-                                    cookie.Name(&mut name)?;
-                                    cookie.Value(&mut value)?;
-                                    cookie.Domain(&mut domain)?;
-                                    cookie.Path(&mut path)?;
-                                    cookie_str.push(Cookie {
-                                        name: take_pwstr(name),
-                                        value: take_pwstr(value),
-                                        domain: take_pwstr(domain),
-                                        path: take_pwstr(path),
-                                    });
-                                }
-                                done_tx.send(cookie_str).unwrap();
-                            }
-                            None => {
-                                eprintln!("Error retrieving cookies");
-                            }
-                        };
-                        Ok(())
-                    }),
-                )
-                .unwrap();
-            }
-
-            #[cfg(target_os = "macos")]
-            unsafe {
-                let () = msg_send![webview.inner(), setPageZoom: 0.75];
-            }
-        })
-        .unwrap();
+        #[cfg(target_os = "macos")]
+        unsafe {
+            let () = msg_send![webview.inner(), setPageZoom: 0.75];
+        }
+    });
 
     _login_window.close().unwrap();
 
-    let cookies = done_rx.await.unwrap();
+    // let cookies: Vec<utils::Cookie> = done_rx.await.unwrap();
 
-    Ok(cookies)
+    // for cookie in &cookies {
+    //     println!("{:?}", cookie);
+    // }
+
+    Ok("".to_string())
 }
 
 fn main() {

@@ -35,7 +35,7 @@
     "windows": [
       {
         "fullscreen": false,
-        "resizable": false,
+        "resizable": true,
         "title": "ouc-info",
         "width": 600,
         "height": 400
