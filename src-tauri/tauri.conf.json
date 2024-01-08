@@ -18,7 +18,7 @@
       }
     },
     "bundle": {
-      "active": true,
+      "active": false,
       "targets": "all",
       "identifier": "club.itstudio.ouc-info",
       "icon": [
@@ -36,9 +36,10 @@
       {
         "fullscreen": false,
         "resizable": true,
-        "title": "ouc-info",
+        "title": "重铸OUC荣光",
         "width": 600,
-        "height": 400
+        "height": 400,
+        "center": true
       }
     ]
   }

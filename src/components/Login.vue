@@ -7,7 +7,13 @@ const COOKIES = ref([]);
 
 async function login() {
   // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-  invoke("login_id_ouc_edu_cn");
+  invoke("login_id_ouc_edu_cn")
+    .then((cookies) => {
+      COOKIES.value = cookies;
+    })
+    .catch((error) => {
+      alert(error);
+    })
 }
 </script>
 
