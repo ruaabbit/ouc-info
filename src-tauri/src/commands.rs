@@ -1,13 +1,15 @@
 use crate::utils;
 
+use reqwest::header;
+
 #[tauri::command]
 pub async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> Result<Vec<utils::Cookie>, String> {
     let login_window: tauri::Window = tauri::WindowBuilder::new(
         &handle,
         "login",
-        tauri::WindowUrl::External("https://id.ouc.edu.cn/".parse().unwrap()),
+        tauri::WindowUrl::External("https://id.ouc.edu.cn/sso/login?service=https%3A%2F%2Fotrust.ouc.edu.cn%3A443%2Fpassport%2Fv1%2Fauth%2Fcas#/".parse().unwrap()),
     )
-    .title("信息门户登录")
+    .title("信息门户VPN登录")
     .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0 ITStudio")
     .inner_size(400., 800.)
     .center()
@@ -16,13 +18,29 @@ pub async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> Result<Vec<utils::
     .build()
     .unwrap();
 
-    'wait_login: loop {
+    'wait_login_vpn: loop {
         if login_window
             .url()
             .to_string()
-            .starts_with("https://id.ouc.edu.cn/api/uia/index")
+            .starts_with("https://otrust.ouc.edu.cn/portal/service_center.html")
         {
+            // 跳转到下一登录页面，URL为https://my-ouc-edu-cn-s.otrust.ouc.edu.cn
+            login_window
+                .eval("location.href = 'https://id-ouc-edu-cn-s.otrust.ouc.edu.cn/sso/login?service=https://my.ouc.edu.cn/cas/login#/'")
+                .unwrap();
+            break 'wait_login_vpn;
+        }
+    }
+    'wait_login: loop {
+        if login_window.url().to_string() == "https://my-ouc-edu-cn-s.otrust.ouc.edu.cn/#/home" {
+            login_window.eval("location.href= 'https://id-ouc-edu-cn-s.otrust.ouc.edu.cn/sso/bridgeLogin?username=20020007043&service=https://zm.ouc.edu.cn/'")
+            .unwrap();
             break 'wait_login;
+        }
+    }
+    'wait_zm: loop {
+        if login_window.url().to_string() == "https://zm-ouc-edu-cn-s.otrust.ouc.edu.cn/" {
+            break 'wait_zm;
         }
     }
 
@@ -30,38 +48,6 @@ pub async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> Result<Vec<utils::
 
     login_window
         .with_webview(move |webview: tauri::window::PlatformWebview| {
-            #[cfg(target_os = "linux")]
-            {
-                use webkit2gtk::gio;
-                use webkit2gtk::traits::{CookieManagerExt, WebContextExt, WebViewExt};
-
-                let linux_webview = webview.inner();
-                linux_webview.set_zoom_level(0.75);
-                let webcontext = linux_webview.context().unwrap();
-                let cookie_manager = webcontext.cookie_manager().unwrap();
-
-                cookie_manager.cookies(
-                    "https://id.ouc.edu.cn/sso",
-                    None::<&gio::Cancellable>,
-                    move |result: Result<Vec<soup::Cookie>, webkit2gtk::Error>| match result {
-                        Ok(cookies) => {
-                            println!("{}", cookies.len());
-                            println!("Cookies received:");
-                            for mut cookie in cookies {
-                                println!(
-                                    "Name: {}, Value: {}",
-                                    cookie.name().unwrap(),
-                                    cookie.value().unwrap()
-                                );
-                            }
-                        }
-                        Err(err) => {
-                            eprintln!("Error retrieving cookies: {}", err);
-                        }
-                    },
-                );
-            }
-
             #[cfg(windows)]
             unsafe {
                 use webview2_com::Microsoft::Web::WebView2::Win32::{
@@ -80,7 +66,7 @@ pub async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> Result<Vec<utils::
                 let core_webview2_2: ICoreWebView2_2 = core_webview2.cast().unwrap();
                 let cookie_manager: ICoreWebView2CookieManager =
                     core_webview2_2.CookieManager().unwrap();
-                let uri = HSTRING::from("https://id.ouc.edu.cn/sso");
+                let uri = HSTRING::from("");
 
                 GetCookiesCompletedHandler::wait_for_async_operation(
                     Box::new(move |handler| {
@@ -134,9 +120,71 @@ pub async fn login_id_ouc_edu_cn(handle: tauri::AppHandle) -> Result<Vec<utils::
 
     let cookies: Vec<utils::Cookie> = done_rx.await.unwrap();
 
-    for cookie in &cookies {
-        println!("{:?}", cookie);
-    }
-
     Ok(cookies)
+}
+
+#[tauri::command]
+pub async fn get_score_pdf_url(
+    cookies: Vec<utils::Cookie>,
+    stu_id: String,
+) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
+
+    let mut req_cookies = String::new();
+    for cookie in &cookies {
+        if cookie.domain.eq(".otrust.ouc.edu.cn")
+            || cookie.domain.eq("zm-ouc-edu-cn-s.otrust.ouc.edu.cn")
+        {
+            req_cookies.push_str(&format!("{}={}; ", cookie.name, cookie.value));
+        }
+    }
+    let mut headers = header::HeaderMap::new();
+    headers.insert(header::COOKIE, req_cookies.parse().unwrap());
+    headers.insert("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0".parse().unwrap());
+    headers.insert("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7".parse().unwrap());
+
+    let res = client.post("https://zm-ouc-edu-cn-s.otrust.ouc.edu.cn/PrintService/GetElectronicEdtion?sf_request_type=ajax")
+        .headers(headers.clone())
+        .body(format!("{{\"TerminalNO\":\"\",\"TerminalIP\":\"\",\"TerminalType\":\"\",\"Data\":{{\"UserCode\":\"{}\",\"TemplateNO\":\"89\",\"id\":\"\",\"name\":\"\",\"code\":\"\"}}}}",stu_id))
+        .send().await.unwrap();
+    // 使用JSON解析器解析返回的JSON字符串，并生成Map
+    let res_json: serde_json::Value = res.json().await.unwrap();
+    let pdf_url = res_json["Data"]["TmpPDFUrl"].as_str().unwrap();
+
+    Ok(format!(
+        "https://zm-ouc-edu-cn-s.otrust.ouc.edu.cn/PrintService/DownloadFilePlat?filePath={}",
+        pdf_url.split("filePath=").collect::<Vec<&str>>()[1]
+    ))
+}
+
+#[tauri::command]
+pub async fn get_pdf_blob(cookies: Vec<utils::Cookie>, pdf_url: String) -> Result<Vec<u8>, String> {
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
+
+    let mut req_cookies = String::new();
+    for cookie in &cookies {
+        if cookie.domain.eq(".otrust.ouc.edu.cn")
+            || cookie.domain.eq("zm-ouc-edu-cn-s.otrust.ouc.edu.cn")
+        {
+            req_cookies.push_str(&format!("{}={}; ", cookie.name, cookie.value));
+        }
+    }
+    let mut headers = header::HeaderMap::new();
+    headers.insert(header::COOKIE, req_cookies.parse().unwrap());
+
+    let res = client
+        .get(pdf_url)
+        .headers(headers.clone())
+        .send()
+        .await
+        .unwrap();
+
+    let pdf_blob = res.bytes().await.unwrap();
+    Ok(pdf_blob.to_vec())
 }

@@ -13,11 +13,12 @@ edition = "2021"
 tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.5", features = ["shell-open"] }
+tauri = { version = "1.5", features = [ "notification-all", "shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-reqwest = { version = "0.11.23" }
+reqwest = { version = "0.11.23", features = ["blocking", "cookies", "json"] }
 oneshot = { version = "0.1.6" }
+bytes = "1.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { version = "0.18.2" }
