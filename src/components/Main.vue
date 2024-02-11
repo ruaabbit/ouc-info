@@ -1,12 +1,10 @@
 <script setup>
 import { ref, defineModel } from "vue";
 import { useRoute } from 'vue-router'
-import axios from "axios";
+import { invoke } from "@tauri-apps/api/tauri";
 
 const route = useRoute();
 
-import { invoke } from "@tauri-apps/api/tauri";
-import { ask } from "@tauri-apps/api/dialog";
 
 var pdfUrl = ref("");
 var cookies = route.query.cookies ? JSON.parse(route.query.cookies) : [];
@@ -29,7 +27,7 @@ function getScorePdfUrl() {
 }
 </script>
 <template>
-    <div>
+    <div class="container">
         <h1>Welcome to Tauri!</h1>
 
         <div class="row">
@@ -44,8 +42,7 @@ function getScorePdfUrl() {
             <button type="submit">查看成绩单</button>
         </form>
         <div v-if="pdfUrl">
-            <!-- TODO 使用PDF.JS预览PDF -->
-            <iframe :src="iframeUrl" style="position:relative;" />
+            <iframe :src="iframeUrl" style="position:relative;" width="100%" height="600px" />
 
         </div>
     </div>
